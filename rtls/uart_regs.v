@@ -64,10 +64,22 @@ wire addr_valid = cfg_wr_hit    |
 
 wire apb_access = psel & penable;
 
-wire cfg_wr_req    = apb_access & cfg_wr_hit;
-wire tx_wr_req     = apb_access & tx_wr_hit;
-wire rx_rd_req     = apb_access & rx_rd_hit;
-wire status_rd_req = apb_access & status_rd_hit;
+reg r_apb_access_d;
+
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        r_apb_access_d <= 1'b0;
+    end else begin
+        r_apb_access_d <= apb_access;
+    end
+end
+
+wire apb_start = apb_access & ~r_apb_access_d;
+
+wire cfg_wr_req    = apb_start & cfg_wr_hit;
+wire tx_wr_req     = apb_start & tx_wr_hit;
+wire rx_rd_req     = apb_start & rx_rd_hit;
+wire status_rd_req = apb_start & status_rd_hit;
 
 // -------------------------------------------------------------------------
 // TX 1/2/3 字节 burst 模式转换
@@ -230,7 +242,6 @@ always @(posedge clk or negedge rst_n) begin
 
         if (rx_rd_req) begin
             r_rx_done <= 1'b0;
-            r_rx_data <= 8'd0;
         end else if (o_rx_fifo_re) begin
             r_rx_data <= rx_fifo_rdata;
             r_rx_done <= 1'b1;
@@ -256,14 +267,24 @@ assign o_irq = r_rx_done & ~rx_done_d;
 // -------------------------------------------------------------------------
 // APB Error / Ready
 // -------------------------------------------------------------------------
-wire apb_addr_err = apb_access && !addr_valid;
+wire apb_error_now = (apb_start && !addr_valid) |
+                     tx_err_now                 |
+                     rx_err_now;
 
-wire apb_error = apb_addr_err |
-                 tx_err_now   |
-                 rx_err_now;
+reg r_apb_error;
+
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        r_apb_error <= 1'b0;
+    end else if (!apb_access) begin
+        r_apb_error <= 1'b0;
+    end else if (apb_start) begin
+        r_apb_error <= apb_error_now;
+    end
+end
 
 assign pready  = apb_access;
-assign pslverr = apb_error;
+assign pslverr = apb_access & (apb_start ? apb_error_now : r_apb_error);
 
 // -------------------------------------------------------------------------
 // APB Read Data

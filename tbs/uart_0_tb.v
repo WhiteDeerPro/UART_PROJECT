@@ -136,7 +136,7 @@ task apb_write;
         wait_cycles = 0;
 
         // SETUP phase
-        @(posedge clk);
+        @(posedge clk); #1;
         psel    = 1'b1;
         penable = 1'b0;
         pwrite  = 1'b1;
@@ -144,13 +144,15 @@ task apb_write;
         pwdata  = data;
 
         // ACCESS phase
-        @(posedge clk);
+        @(posedge clk); #1;
         penable = 1'b1;
+
+        @(posedge clk); #1;
 
         //等待 pready
         while (!pready) begin
             wait_cycles = wait_cycles + 1;
-            @(posedge clk);
+            @(posedge clk); #1;
         end
 
         last_apb_pslverr = pslverr;
@@ -158,7 +160,6 @@ task apb_write;
         write_eta_ns = (write_end - write_start) * 1.0;
 
         // 释放总线
-        @(posedge clk); #1;
         psel    = 1'b0;
         penable = 1'b0;
         pwrite  = 1'b0;
@@ -184,7 +185,7 @@ task apb_read;
         apb_bus_busy = 1'b1;
 
         // SETUP phase
-        @(posedge clk);
+        @(posedge clk); #1;
         psel    = 1'b1;
         penable = 1'b0;
         pwrite  = 1'b0;
@@ -192,12 +193,14 @@ task apb_read;
         pwdata  = 32'd0;
 
         // ACCESS phase
-        @(posedge clk);
+        @(posedge clk); #1;
         penable = 1'b1;
+
+        @(posedge clk); #1;
 
         // 等待 pready
         while (!pready) begin
-            @(posedge clk);
+            @(posedge clk); #1;
         end
 
         last_apb_pslverr = pslverr;
@@ -208,7 +211,6 @@ task apb_read;
             rdata = prdata;
 
         // 释放总线
-        @(posedge clk); #1;
         psel    = 1'b0;
         penable = 1'b0;
 

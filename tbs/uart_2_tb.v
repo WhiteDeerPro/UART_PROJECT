@@ -96,13 +96,15 @@ task apb_write;
     begin
         while (apb_bus_busy) @(posedge clk);
         apb_bus_busy = 1;
-        @(posedge clk);
+        @(posedge clk); #1;
         psel=1; penable=0; pwrite=1; paddr=addr; pwdata=data;
-        @(posedge clk);
+        @(posedge clk); #1;
         penable = 1;
-        while (!pready) @(posedge clk);
+        @(posedge clk); #1;
+        while (!pready) begin
+            @(posedge clk); #1;
+        end
         last_apb_pslverr = pslverr;
-        @(posedge clk);
         psel=0; penable=0; pwrite=0;
         apb_bus_busy = 0;
     end
@@ -117,15 +119,17 @@ task apb_read;
     begin
         while (apb_bus_busy) @(posedge clk);
         apb_bus_busy = 1;
-        @(posedge clk);
+        @(posedge clk); #1;
         psel=1; penable=0; pwrite=0; paddr=addr; pwdata=0;
-        @(posedge clk);
+        @(posedge clk); #1;
         penable = 1;
-        while (!pready) @(posedge clk);
+        @(posedge clk); #1;
+        while (!pready) begin
+            @(posedge clk); #1;
+        end
         last_apb_pslverr = pslverr;
         if (pslverr) rdata = 32'hDEAD_BEEF;
         else         rdata = prdata;
-        @(posedge clk);
         psel=0; penable=0;
         repeat(2) @(posedge clk);
         apb_bus_busy = 0;
@@ -309,16 +313,16 @@ initial begin
     t2_err_cnt    = 0;
 
     for (i=0; i<3; i=i+1) begin
-        t2_expect[i]   = i + 8'hD0;
-        t2_expect[i+3] = i + 8'hE0;
+        t2_expect[2*i]   = i + 8'hD0;
+        t2_expect[2*i+1] = i + 8'hE0;
     end
 
     for (i=0; i<3; i=i+1) begin
-        $display("[%0t] T2-Main: TX Round %0d, data=0x%02X", $time, i, t2_expect[i]);
+        $display("[%0t] T2-Main: TX Round %0d, data=0x%02X", $time, i, t2_expect[2*i]);
         t2_isr_do_write   = 1;
-        t2_isr_write_data = t2_expect[i+3];
+        t2_isr_write_data = t2_expect[2*i+1];
         t2_isr_write_done = 0;
-        apb_write_safe(ADDR_TX, {24'd0, t2_expect[i]});
+        apb_write_safe(ADDR_TX, {24'd0, t2_expect[2*i]});
 
         wait_count = 0;
         while (!t2_isr_write_done && wait_count < 200000) begin
@@ -346,25 +350,14 @@ initial begin
     end
 
     $display("\n============ TEST 2 Results ============");
-    $display("Phase A (Main TX -> ISR RX):");
+    $display("RX order: Main TX byte, then ISR TX byte for each round");
     $display(" No. | TX Sent | RX Got | Result");
     $display("----------------------------------");
-    for (i=0; i<3; i=i+1) begin
+    for (i=0; i<T2_TOTAL; i=i+1) begin
         if (t2_expect[i] === t2_got[i])
             $display(" %3d |  0x%02X  |  0x%02X  | PASS", i, t2_expect[i], t2_got[i]);
         else begin
             $display(" %3d |  0x%02X  |  0x%02X  | FAIL <<<", i, t2_expect[i], t2_got[i]);
-            t2_err_cnt = t2_err_cnt + 1;
-        end
-    end
-    $display("\nPhase B (ISR TX B2B -> ISR RX loopback):");
-    $display(" No. | TX Sent | RX Got | Result");
-    $display("----------------------------------");
-    for (i=3; i<6; i=i+1) begin
-        if (t2_expect[i] === t2_got[i])
-            $display(" %3d |  0x%02X  |  0x%02X  | PASS", i-3, t2_expect[i], t2_got[i]);
-        else begin
-            $display(" %3d |  0x%02X  |  0x%02X  | FAIL <<<", i-3, t2_expect[i], t2_got[i]);
             t2_err_cnt = t2_err_cnt + 1;
         end
     end
