@@ -3,3 +3,6 @@
 vcds/
 vvps/
 
+# Local SSH deploy keys. Never commit private keys.
+id_ed25519_uart_project
+id_ed25519_uart_project.pub
