@@ -333,8 +333,14 @@ end
 // 波形
 // ------------------------------
 initial begin
+`ifdef DUMP_FSDB
+    $fsdbDumpfile("uart_1.fsdb");
+    $fsdbDumpvars(0, uart_tb);
+    $fsdbDumpMDA();
+`else
     $dumpfile("uart_tb_256_poll_irq.vcd");
     $dumpvars(0, uart_tb);
+`endif
 end
 
 endmodule

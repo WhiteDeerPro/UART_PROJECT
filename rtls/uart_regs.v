@@ -70,19 +70,19 @@ wire rx_rd_req     = apb_access & rx_rd_hit;
 wire status_rd_req = apb_access & status_rd_hit;
 
 // -------------------------------------------------------------------------
-// 1/2/3 字节模式转换
+// TX 1/2/3 字节 burst 模式转换
 // mode = 0: 1 byte
 // mode = 1: 2 bytes
 // mode = 2: 3 bytes
 // mode = 3: 3 bytes
 // -------------------------------------------------------------------------
-function [1:0] mode_to_byte_cnt;
+function [1:0] tx_mode_to_byte_cnt;
     input [1:0] mode;
     begin
         case (mode)
-            2'd0:    mode_to_byte_cnt = 2'd1;
-            2'd1:    mode_to_byte_cnt = 2'd2;
-            default: mode_to_byte_cnt = 2'd3;
+            2'd0:    tx_mode_to_byte_cnt = 2'd1;
+            2'd1:    tx_mode_to_byte_cnt = 2'd2;
+            default: tx_mode_to_byte_cnt = 2'd3;
         endcase
     end
 endfunction
@@ -119,11 +119,9 @@ assign o_cfg_parity_en_tx   = r_active_cfg[19];
 assign o_cfg_parity_mode_tx = r_active_cfg[20];
 assign o_cfg_stop_mode_tx   = r_active_cfg[21];
 
-wire [1:0] cfg_rx_mode  = r_active_cfg[23:22];
 wire [1:0] cfg_tx_burst = r_active_cfg[25:24];
 
-wire [1:0] tx_byte_cnt = mode_to_byte_cnt(cfg_tx_burst);
-wire [1:0] rx_byte_cnt = mode_to_byte_cnt(cfg_rx_mode);
+wire [1:0] tx_byte_cnt = tx_mode_to_byte_cnt(cfg_tx_burst);
 
 // -------------------------------------------------------------------------
 // TX FSM
@@ -208,36 +206,19 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 // -------------------------------------------------------------------------
-// RX FSM
+// RX single-byte latch
 // -------------------------------------------------------------------------
-localparam RX_IDLE = 2'd0;
-localparam RX_BUSY = 2'd1;
-localparam RX_DONE = 2'd2;
-
-reg [1:0]  rx_state;
-reg [1:0]  r_rx_remain;
-reg [1:0]  r_rx_count;
-reg [23:0] r_rx_data;
-reg        r_rx_done;
-reg        r_rx_err;
-
-wire rx_idle_fifo_re = (rx_state == RX_IDLE) &&
-                       !rx_fifo_empty;
-
-wire rx_busy_fifo_re = (rx_state == RX_BUSY) &&
-                       !rx_fifo_empty &&
-                       (r_rx_remain != 2'd0);
-
-assign o_rx_fifo_re = rx_idle_fifo_re | rx_busy_fifo_re;
+reg [7:0] r_rx_data;
+reg       r_rx_done;
+reg       r_rx_err;
 
 wire rx_err_now = rx_rd_req && !r_rx_done;
 
+assign o_rx_fifo_re = !r_rx_done && !rx_fifo_empty;
+
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-        rx_state    <= RX_IDLE;
-        r_rx_remain <= 2'd0;
-        r_rx_count  <= 2'd0;
-        r_rx_data   <= 24'd0;
+        r_rx_data   <= 8'd0;
         r_rx_done   <= 1'b0;
         r_rx_err    <= 1'b0;
     end else begin
@@ -247,73 +228,13 @@ always @(posedge clk or negedge rst_n) begin
             r_rx_err <= 1'b1;
         end
 
-        case (rx_state)
-            RX_IDLE: begin
-                r_rx_done   <= 1'b0;
-                r_rx_remain <= 2'd0;
-                r_rx_count  <= 2'd0;
-
-                if (rx_idle_fifo_re) begin
-                    r_rx_data[7:0]   <= rx_fifo_rdata;
-                    r_rx_data[15:8]  <= 8'd0;
-                    r_rx_data[23:16] <= 8'd0;
-
-                    if (rx_byte_cnt == 2'd1) begin
-                        r_rx_done   <= 1'b1;
-                        r_rx_remain <= 2'd0;
-                        r_rx_count  <= 2'd1;
-                        rx_state    <= RX_DONE;
-                    end else begin
-                        r_rx_done   <= 1'b0;
-                        r_rx_remain <= rx_byte_cnt - 2'd1;
-                        r_rx_count  <= 2'd1;
-                        rx_state    <= RX_BUSY;
-                    end
-                end
-            end
-
-            RX_BUSY: begin
-                if (rx_busy_fifo_re) begin
-                    case (r_rx_count)
-                        2'd1: r_rx_data[15:8]  <= rx_fifo_rdata;
-                        2'd2: r_rx_data[23:16] <= rx_fifo_rdata;
-                        default: ;
-                    endcase
-
-                    if (r_rx_remain == 2'd1) begin
-                        r_rx_done   <= 1'b1;
-                        r_rx_remain <= 2'd0;
-                        rx_state    <= RX_DONE;
-                    end else begin
-                        r_rx_done   <= 1'b0;
-                        r_rx_remain <= r_rx_remain - 2'd1;
-                        rx_state    <= RX_BUSY;
-                    end
-
-                    r_rx_count <= r_rx_count + 2'd1;
-                end
-            end
-
-            RX_DONE: begin
-                r_rx_done <= 1'b1;
-
-                if (rx_rd_req) begin
-                    r_rx_done   <= 1'b0;
-                    r_rx_data   <= 24'd0;
-                    r_rx_remain <= 2'd0;
-                    r_rx_count  <= 2'd0;
-                    rx_state    <= RX_IDLE;
-                end
-            end
-
-            default: begin
-                rx_state    <= RX_IDLE;
-                r_rx_remain <= 2'd0;
-                r_rx_count  <= 2'd0;
-                r_rx_data   <= 24'd0;
-                r_rx_done   <= 1'b0;
-            end
-        endcase
+        if (rx_rd_req) begin
+            r_rx_done <= 1'b0;
+            r_rx_data <= 8'd0;
+        end else if (o_rx_fifo_re) begin
+            r_rx_data <= rx_fifo_rdata;
+            r_rx_done <= 1'b1;
+        end
     end
 end
 
@@ -362,7 +283,7 @@ always @(*) begin
         end
 
         ADDR_RX: begin
-            r_prdata = {8'd0, r_rx_data};
+            r_prdata = {24'd0, r_rx_data};
         end
 
         ADDR_STATUS: begin

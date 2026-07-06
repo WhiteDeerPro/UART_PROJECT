@@ -1,7 +1,8 @@
 # UART RTL
 
 Verilog UART IP with an APB register interface, TX/RX FIFOs, baud-rate
-generation, parity support, stop-bit configuration, and IRQ-driven RX reads.
+generation, parity support, stop-bit configuration, TX burst writes, and
+single-byte IRQ-driven RX reads.
 
 ## Directory Layout
 
@@ -13,8 +14,8 @@ generation, parity support, stop-bit configuration, and IRQ-driven RX reads.
 ## Main RTL
 
 - `uart.v`: top-level UART with APB, FIFOs, BRG, TX, RX, and IRQ.
-- `uart_regs.v`: APB register block, configuration shadowing, TX/RX packing,
-  status, error response, and IRQ generation.
+- `uart_regs.v`: APB register block, configuration shadowing, TX burst packing,
+  single-byte RX latch, status, error response, and IRQ generation.
 - `uart_tx.v`: single-byte UART transmitter.
 - `uart_rx.v`: 16x oversampling UART receiver.
 - `uart_fifo.v`: synchronous FWFT FIFO.
@@ -32,6 +33,28 @@ generation, parity support, stop-bit configuration, and IRQ-driven RX reads.
 
 ## Example Simulation
 
+### VCS and Verdi
+
+The root `Makefile` provides VCS compile/run and Verdi debug targets. The
+default test is `uart_1`.
+
+```sh
+make uart_1
+make uart_1_verdi
+```
+
+Other top-level loopback tests:
+
+```sh
+make uart_0
+make uart_2
+```
+
+The VCS flow writes FSDB files under `build/<test>/` when compiled with
+`+define+DUMP_FSDB`, which is enabled by the Makefile.
+
+### Icarus Verilog
+
 Install Icarus Verilog, then compile one top-level testbench with the RTL:
 
 ```sh
@@ -45,3 +68,11 @@ vvp sim.vvp
 
 Some older standalone testbenches may need port-name updates before they match
 the current RTL.
+
+## Configuration Notes
+
+- `CFG[15:0]`: baud divider.
+- `CFG[18:16]`: RX parity and stop-bit configuration.
+- `CFG[21:19]`: TX parity and stop-bit configuration.
+- `CFG[23:22]`: reserved. RX register reads are always single-byte.
+- `CFG[25:24]`: TX write burst mode, mapping to 1/2/3 bytes.

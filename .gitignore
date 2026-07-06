@@ -1,5 +1,16 @@
 *.vcd
 *.vvp
+*.fsdb
+*.vpd
+*.vdb
+*.log
+*.key
+simv*
+csrc*
+build/
+verdiLog/
+novas.*
+ucli.key
 vcds/
 vvps/
 

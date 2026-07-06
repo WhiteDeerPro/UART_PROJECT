@@ -422,8 +422,14 @@ end
 // Waveform
 // =========================================================================
 initial begin
+`ifdef DUMP_FSDB
+    $fsdbDumpfile("uart_0.fsdb");
+    $fsdbDumpvars(0, uart_tb);
+    $fsdbDumpMDA();
+`else
     $dumpfile("uart_tb.vcd");
     $dumpvars(0, uart_tb);
+`endif
 end
 
 endmodule
