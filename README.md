@@ -11,6 +11,12 @@ single-byte IRQ-driven RX reads.
 - `vcds/`: generated waveform dumps, ignored by Git.
 - `vvps/`: generated Icarus Verilog simulation outputs, ignored by Git.
 
+## Authors
+
+- WhiteDeerPro <1207707136@qq.com>
+- 10kyfu <2194438514@qq.com>
+- strive2021 <xiligongda@outlook.com>
+
 ## Main RTL
 
 - `uart.v`: top-level UART with APB, FIFOs, BRG, TX, RX, and IRQ.
